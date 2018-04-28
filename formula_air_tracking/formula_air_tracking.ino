@@ -4,7 +4,7 @@
 #define BLUSHLESS_PIN 9
 #define STEERING_PIN 10
 
-#define CALIBRATION 1000 
+#define CALIBRATION 0 
 #define STEERING_MAX 60
 #define DELTA_T 0.001
 #define SPEED 100
@@ -91,7 +91,7 @@ void line_follow() {
     error_history[9] = error;
 
     int error_i = 0, error_d = 0;
-    error_d = error_history[9] - error_history[1];
+    error_d = error_history[9] - error_history[8];
     for (int i = 0; i < 10; ++i)
         error_i += error_history[i];
 
@@ -99,7 +99,6 @@ void line_follow() {
     steering_cmd = constrain(steering_cmd, 90-STEERING_MAX, 90+STEERING_MAX);
     Serial.println("Steering cmd: " + steering_cmd);
     steering.write(steering_cmd); 
-
 
 }
 
