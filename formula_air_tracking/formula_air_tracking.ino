@@ -77,16 +77,17 @@ void line_follow() {
         error_history[i] = error_history[i+1];
 
     int error = 0, weighted_sum = 0, sum = 0;
-    Serial.print("sensor value: ");
+    Serial.print("Sensor value: ");
     for (int i = 0; i < 5; ++i) {
         sensor_value[i] = analogRead(sensor_pin[i]);
-        Serial.print(sensor_value[i]+'\t');
+        Serial.print(sensor_value[i] + '\t');
         weighted_sum += sensor_value[i]*i*1000;
         sum += sensor_value[i];
     }
     Serial.println("");
 
     error = weighted_sum/sum - CALIBRATION;
+    Serial.println("Error: " + error);
     error_history[9] = error;
 
     int error_i = 0, error_d = 0;
@@ -96,8 +97,7 @@ void line_follow() {
 
     int steering_cmd = 90 + KP * error + KI * error_i + KD * error_d;
     steering_cmd = constrain(steering_cmd, 90-STEERING_MAX, 90+STEERING_MAX);
-    Serial.print("steering cmd: ");
-    Serial.println(steering_cmd);
+    Serial.println("Steering cmd: " + steering_cmd);
     steering.write(steering_cmd); 
 
 
