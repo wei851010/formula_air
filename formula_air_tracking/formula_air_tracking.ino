@@ -1,16 +1,17 @@
 #include<Servo.h>
 
-#define SENSOR_PIN {2, 3, 4, 5, 6}
+#define SENSOR_PIN {A0, A1, A2, A3, A4}
 #define BLUSHLESS_PIN 9
 #define STEERING_PIN 10
 
-#define CALIBRATION 0 
-#define STEERING_MAX 60
+#define CALIBRATION 2000 
+#define STEERING_MAX 40
+#define STEERING_MED 90
 #define DELTA_T 0.001
 #define SPEED 100
 
-#define KP 10
-#define KI 0 * DELTA_T
+#define KP 0.03
+#define KI 1 * DELTA_T
 #define KD 0 / DELTA_T
 
 Servo brushless;
@@ -27,22 +28,23 @@ void test();
 void setup() {
     Serial.begin(9600);
 
-    for (int i = 0; i < 5; ++i) pinMode(sensor_pin[i], OUTPUT);
+    for (int i = 0; i < 5; ++i) pinMode(sensor_pin[i], INPUT);
     brushless.attach(BLUSHLESS_PIN);
     steering.attach(STEERING_PIN);
-    steering.write(90);
+    steering.write(STEERING_MED);
 
     brushless_init();
 
-    delay(3000);
+    //delay(3000);
     //test();
 }
 
 void loop() {
-    
-     
     line_follow();
     delay(DELTA_T *1000);
+    if(Serial.available()) {
+       char c = Serial.read();
+    }
 }
 
 void test() {
@@ -72,22 +74,23 @@ void test() {
 }
 
 void line_follow() {
-    int sensor_value[5] = {0};
+    long sensor_value[5] = {0};
     for  (int i = 0; i < 9 ; ++i)
         error_history[i] = error_history[i+1];
 
-    int error = 0, weighted_sum = 0, sum = 0;
-    Serial.print("Sensor value: ");
+    long error = 0, weighted_sum = 0, sum = 0;
+    Serial.print("Sensor value: \t");
     for (int i = 0; i < 5; ++i) {
         sensor_value[i] = analogRead(sensor_pin[i]);
-        Serial.print(sensor_value[i] + '\t');
+        Serial.print(sensor_value[i]);
+        Serial.print('\t');
         weighted_sum += sensor_value[i]*i*1000;
         sum += sensor_value[i];
     }
-    Serial.println("");
 
     error = weighted_sum/sum - CALIBRATION;
-    Serial.println("Error: " + error);
+    Serial.print("\tError: ");
+    Serial.print(error);
     error_history[9] = error;
 
     int error_i = 0, error_d = 0;
@@ -95,9 +98,10 @@ void line_follow() {
     for (int i = 0; i < 10; ++i)
         error_i += error_history[i];
 
-    int steering_cmd = 90 + KP * error + KI * error_i + KD * error_d;
-    steering_cmd = constrain(steering_cmd, 90-STEERING_MAX, 90+STEERING_MAX);
-    Serial.println("Steering cmd: " + steering_cmd);
+    int steering_cmd = STEERING_MED + KP * error + KI * error_i + KD * error_d;
+    steering_cmd = constrain(steering_cmd, STEERING_MED-STEERING_MAX, STEERING_MED+STEERING_MAX);
+    Serial.print("\tSteering cmd: ");
+    Serial.println(steering_cmd);
     steering.write(steering_cmd); 
 
 }
