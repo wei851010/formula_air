@@ -3,7 +3,7 @@ Servo s;
 
 void setup() {
     s.attach(10);
-    s.write(90);
+    s.write(30);
 }
 void loop() {
 }
