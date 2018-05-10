@@ -81,7 +81,8 @@ void line_follow() {
         Serial.print(sensor_value[i]);
 #endif
         //Double trigger line
-        if (sensor_value[i] > calibration[i][1] && !pre_sensor_value[i] || sensor_value[i] < calibration[i][0] && pre_sensor_value[i])
+        if (sensor_value[i] > calibration[i][1] && !pre_sensor_value[i] || 
+            sensor_value[i] < calibration[i][0] && pre_sensor_value[i])
             sensor_value[i] = !pre_sensor_value[i];
         else
             sensor_value[i] = pre_sensor_value[i];
