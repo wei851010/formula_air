@@ -2,12 +2,13 @@
     FileName    [ formula_air_tracking.ino ]
     Synopsis    [ Tracking line using PID and bang bang control ]
     Author      [ Johnson Shih, Frank Lin ]
-    Copyright   [ Group 15 小萌牛©2018, NTUME ]
+    Copyleft    [ Group 15 小萌牛©2018, NTUME ]
 ************************************************/
 
 /********************Options********************/
 #define DIGITAL
-//#define SERIAL_DEBUG
+#define SERIAL_DEBUG
+//#define BOOSTING
 /********************Include********************/
 #include<Servo.h>
 /********************Pins***********************/
@@ -39,7 +40,9 @@ int sensor_pin[6] = SENSOR_PIN;
 int calibration[6][2] = CALIBRATION;
 int pre_sensor_value[6] = {0};
 float kp = KP, ki = KI, kd = KD;
+#ifdef BOOSTING
 int counter = 0;
+#endif
 /********************Functions******************/
 void brushless_init();
 void line_follow();
@@ -124,11 +127,13 @@ int pid() {
     long error_d = error - error_last;
     long error_i = error_sum;
     //Speed boosting
+#ifdef BOOSTING
     counter = (error_d)? 0: counter+1;
     if (counter >= 200)
         brushless.write(SPEED+10);
     else
         brushless.write(SPEED);
+#endif
     //Caculate Error
     int steering_cmd = STEERING_MED + error_p * kp + error_i * ki + error_d * kd;
     steering_cmd = constrain(steering_cmd, STEERING_MED-STEERING_MAX, STEERING_MED+STEERING_MAX);
