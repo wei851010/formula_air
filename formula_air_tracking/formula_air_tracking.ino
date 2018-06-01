@@ -15,12 +15,15 @@
 #define SENSOR_PIN {A0, A1, A2, A3, A4, A5}
 #define BLUSHLESS_PIN 9
 #define STEERING_PIN 10
+#define TRIGGER_PIN 11
+#define ECHO_PIN 12
 /********************Other Parameters***********/
 #define SET_POINT 2000 
 #define STEERING_MAX 60
 #define STEERING_MED 90
 #define DELTA_T 0.001
 #define SPEED 28
+#define BARRIER_DELAY 1000
 /********************Calibration Values*********/
 #define CALIBRATION {{400, 550}, {450, 600}, {450, 600}, {450, 600}, {400, 550}, {550, 700}}
 /********************PID Parameters*************/
@@ -39,7 +42,10 @@ int error_last = 0;
 int sensor_pin[6] = SENSOR_PIN;
 int calibration[6][2] = CALIBRATION;
 int pre_sensor_value[6] = {0};
+int dist_history[10] = {0};
 float kp = KP, ki = KI, kd = KD;
+enum Status{normal, barrier};
+Status status = normal;
 #ifdef BOOSTING
 int counter = 0;
 #endif
@@ -47,6 +53,9 @@ int counter = 0;
 void brushless_init();
 void line_follow();
 int pid();
+void skip_barrier();
+int get_dist();
+int ultrasonic();
 
 void setup() {
 #ifdef SERIAL_DEBUG
@@ -54,16 +63,26 @@ void setup() {
 #endif
     //Pin initialization
     for (int i = 0; i < 6; ++i) pinMode(sensor_pin[i], INPUT);
+    pinMode(TRIGGER_PIN, OUTPUT);
+    pinMode(ECHO_PIN, INPUT);
     brushless.attach(BLUSHLESS_PIN);
     steering.attach(STEERING_PIN);
     //Intial position
     steering.write(STEERING_MED);
+    status = normal;
     brushless_init();
 }
 
 void loop() {
-    line_follow();
+    status = (get_dist() < BARRIER_DIST)? barrier: normal;  
+    if (status == normal)
+        line_follow();
+    else
+        skip_barrier();
     delay(DELTA_T *1000);
+#ifdef SERIAL_DEBUG
+    Serial.println("");
+#endif
 }
 
 void line_follow() {
@@ -116,9 +135,11 @@ void line_follow() {
 #endif
     //write cmd
     steering.write(steering_cmd); 
-#ifdef SERIAL_DEBUG
-    Serial.println("");
-#endif
+}
+
+void skip_barrier() {
+    steering.write(STEERING_MED+STEERING_MAX);
+    delay(BARRIER_DELAY);
 }
 
 int pid() {
@@ -148,4 +169,30 @@ void brushless_init() {
     brushless.write(15);
     delay(3000);
     brushless.write(SPEED);
+}
+
+int ultrasonic() {
+    long dura, dist;
+    digitalWrite(TRIGGER_PIN, LOW);
+    delayMicroseconds(2);
+    digitalWrite(TRIGGER_PIN, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(TRIGGER_PIN, LOW);
+    dura = pulseIn(ECHO_PIN, HIGH);
+    dist = (dura/2) / 29.1;
+    return dist
+}
+
+int get_dist() {
+    int sum = 0;
+    for (int i = 0; i < 9; ++i) dist_history[i] = dist_history[i+1];
+    dist_history[9] = ultrasonic();
+    if (dist_history[9] > 300) dist_history[9] = dist_history[8];
+    for (int i = 0; i < 10; ++i) sum += dist_history[i];
+    sum \= 10;
+#ifdef SERIAL_DEBUG
+    Serial.print("\tDist: ");
+    Serial.print(sum);
+#endif
+    return sum;
 }
