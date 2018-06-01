@@ -24,6 +24,7 @@
 #define DELTA_T 0.001
 #define SPEED 28
 #define BARRIER_DELAY 1000
+#define BARRIER_DIST 50
 /********************Calibration Values*********/
 #define CALIBRATION {{400, 550}, {450, 600}, {450, 600}, {450, 600}, {400, 550}, {550, 700}}
 /********************PID Parameters*************/
@@ -180,7 +181,7 @@ int ultrasonic() {
     digitalWrite(TRIGGER_PIN, LOW);
     dura = pulseIn(ECHO_PIN, HIGH);
     dist = (dura/2) / 29.1;
-    return dist
+    return dist;
 }
 
 int get_dist() {
@@ -189,7 +190,7 @@ int get_dist() {
     dist_history[9] = ultrasonic();
     if (dist_history[9] > 300) dist_history[9] = dist_history[8];
     for (int i = 0; i < 10; ++i) sum += dist_history[i];
-    sum \= 10;
+    sum /= 10;
 #ifdef SERIAL_DEBUG
     Serial.print("\tDist: ");
     Serial.print(sum);
