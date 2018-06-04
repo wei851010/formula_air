@@ -23,10 +23,10 @@
 #define STEERING_MED 90
 #define DELTA_T 1
 #define SPEED 28
-#define BARRIER_DELAY 1000
+#define BARRIER_DELAY 900
 #define BARRIER_DIST 50
 /********************Calibration Values*********/
-#define CALIBRATION {{400, 550}, {550, 700}, {550, 700}, {500, 650}, {500, 650}, {650, 800}}
+#define CALIBRATION {{550, 650}, {630, 730}, {630, 730}, {550, 650}, {600, 700}, {750, 850}}
 /********************PID Parameters*************/
 #define KP 4.2 * 0.001 
 #define KI 0.007 * 0.001
@@ -44,7 +44,7 @@ int sensor_pin[6] = SENSOR_PIN;
 int calibration[6][2] = CALIBRATION;
 int pre_sensor_value[6] = {0};
 int dist_history[10] = {0};
-int skip_step = 0;
+unsigned long start_time = 0;
 float kp = KP, ki = KI, kd = KD;
 enum Status{normal, barrier};
 Status status = normal;
@@ -76,7 +76,10 @@ void setup() {
 }
 
 void loop() {
-    //status = (get_dist() < BARRIER_DIST)? barrier: normal;  
+    if (get_dist() < BARRIER_DIST) {
+      start_time = millis();
+      status = barrier;
+    }
     if (status == normal)
         line_follow();
     else
@@ -141,7 +144,7 @@ void line_follow() {
 
 void skip_barrier() {
     steering.write(STEERING_MED+STEERING_MAX);
-    delay(BARRIER_DELAY);
+    if(millis()-start_time > BARRIER_DELAY) status = normal;
 }
 
 int pid() {
@@ -167,7 +170,7 @@ int pid() {
 
 void brushless_init() {
     brushless.write(100);
-    delay(100);
+    delay(200);
     brushless.write(15);
     delay(3000);
     brushless.write(SPEED);
@@ -180,18 +183,19 @@ int ultrasonic() {
     digitalWrite(TRIGGER_PIN, HIGH);
     delayMicroseconds(10);
     digitalWrite(TRIGGER_PIN, LOW);
-    dura = pulseIn(ECHO_PIN, HIGH);
+    dura = pulseIn(ECHO_PIN, HIGH, 5000);
     dist = (dura/2) / 29.1;
     return dist;
 }
 
 int get_dist() {
     int sum = 0;
-    for (int i = 0; i < 9; ++i) dist_history[i] = dist_history[i+1];
-    dist_history[9] = ultrasonic();
-    if (dist_history[9] > 300) dist_history[9] = dist_history[8];
-    for (int i = 0; i < 10; ++i) sum += dist_history[i];
-    sum /= 10;
+    int n = 5;
+    for (int i = 0; i < n-1; ++i) dist_history[i] = dist_history[i+1];
+    dist_history[n-1] = ultrasonic();
+    if (dist_history[n-1] == 0) dist_history[n-1] = 200;
+    for (int i = 0; i < n; ++i) sum += dist_history[i];
+    sum /= n;
 #ifdef SERIAL_DEBUG
     Serial.print("Dist: ");
     Serial.print(sum);
