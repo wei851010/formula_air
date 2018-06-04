@@ -19,14 +19,14 @@
 #define ECHO_PIN 12
 /********************Other Parameters***********/
 #define SET_POINT 2000 
-#define STEERING_MAX 60
+#define STEERING_MAX 40
 #define STEERING_MED 90
-#define DELTA_T 0.001
+#define DELTA_T 1
 #define SPEED 28
 #define BARRIER_DELAY 1000
 #define BARRIER_DIST 50
 /********************Calibration Values*********/
-#define CALIBRATION {{400, 550}, {450, 600}, {450, 600}, {450, 600}, {400, 550}, {550, 700}}
+#define CALIBRATION {{400, 550}, {550, 700}, {550, 700}, {500, 650}, {500, 650}, {650, 800}}
 /********************PID Parameters*************/
 #define KP 4.2 * 0.001 
 #define KI 0.007 * 0.001
@@ -44,6 +44,7 @@ int sensor_pin[6] = SENSOR_PIN;
 int calibration[6][2] = CALIBRATION;
 int pre_sensor_value[6] = {0};
 int dist_history[10] = {0};
+int skip_step = 0;
 float kp = KP, ki = KI, kd = KD;
 enum Status{normal, barrier};
 Status status = normal;
@@ -75,12 +76,12 @@ void setup() {
 }
 
 void loop() {
-    status = (get_dist() < BARRIER_DIST)? barrier: normal;  
+    //status = (get_dist() < BARRIER_DIST)? barrier: normal;  
     if (status == normal)
         line_follow();
     else
         skip_barrier();
-    delay(DELTA_T *1000);
+    delay(DELTA_T);
 #ifdef SERIAL_DEBUG
     Serial.println("");
 #endif
@@ -192,8 +193,9 @@ int get_dist() {
     for (int i = 0; i < 10; ++i) sum += dist_history[i];
     sum /= 10;
 #ifdef SERIAL_DEBUG
-    Serial.print("\tDist: ");
+    Serial.print("Dist: ");
     Serial.print(sum);
+    Serial.print("\t");
 #endif
     return sum;
 }
