@@ -10,7 +10,8 @@
 #define SERIAL_DEBUG
 //#define BOOSTING
 /********************Include********************/
-#include<Servo.h>
+#include <Servo.h>
+#include <NewPing.h>
 /********************Pins***********************/
 #define SENSOR_PIN {A0, A1, A2, A3, A4, A5}
 #define BLUSHLESS_PIN 9
@@ -18,22 +19,23 @@
 #define TRIGGER_PIN 11
 #define ECHO_PIN 12
 /********************Other Parameters***********/
-#define SET_POINT 2000 
-#define STEERING_MAX 40
+#define STEERING_MAX 35
 #define STEERING_MED 90
 #define DELTA_T 1
 #define SPEED 28
 #define BARRIER_DELAY 900
-#define BARRIER_DIST 50
+#define BARRIER_DIST 60
+#define MAX_DISTANCE 100
 /********************Calibration Values*********/
 #define CALIBRATION {{550, 650}, {630, 730}, {630, 730}, {550, 650}, {600, 700}, {750, 850}}
 /********************PID Parameters*************/
 #define KP 4.2 * 0.001 
-#define KI 0.007 * 0.001
-#define KD 7 * 0.001
+#define KI 0.01 * 0.001
+#define KD 6 * 0.001
 
 Servo brushless;
 Servo steering;
+NewPing sonar(TRIGGER_PIN, ECHO_PIN, MAX_DISTANCE);
 /********************Variables******************/
 float weight[6] = {-5, -3, -1, 1, 3, 5};
 int brushless_cmd = 0;
@@ -43,11 +45,11 @@ int error_last = 0;
 int sensor_pin[6] = SENSOR_PIN;
 int calibration[6][2] = CALIBRATION;
 int pre_sensor_value[6] = {0};
-int dist_history[10] = {0};
+int dist_history[5] = {0};
 unsigned long start_time = 0;
 float kp = KP, ki = KI, kd = KD;
-enum Status{normal, barrier};
-Status status = normal;
+enum Status {normal, barrier};
+Status state = normal;
 #ifdef BOOSTING
 int counter = 0;
 #endif
@@ -71,16 +73,16 @@ void setup() {
     steering.attach(STEERING_PIN);
     //Intial position
     steering.write(STEERING_MED);
-    status = normal;
+    state = normal;
     brushless_init();
 }
 
 void loop() {
     if (get_dist() < BARRIER_DIST) {
       start_time = millis();
-      status = barrier;
+      state = barrier;
     }
-    if (status == normal)
+    if (state == normal)
         line_follow();
     else
         skip_barrier();
@@ -94,14 +96,14 @@ void line_follow() {
     long sensor_value[6] = {0};
     long weighted_sum = 0, sum = 0;
 #ifdef SERIAL_DEBUG
-    Serial.print("Sensor value:");
+    Serial.print("   Sensor value:");
 #endif
     for (int i = 0; i < 6; ++i) {
 #ifndef DIGITAL
-        //Using Analog Signal
+        //Using Digital Signal
         sensor_value[i] = analogRead(sensor_pin[i]);
 #else
-        //Using Digital Signal
+        //Using Analog Signal
         sensor_value[i] = analogRead(sensor_pin[i]);
 #ifdef SERIAL_DEBUG
         Serial.print(' ');
@@ -125,17 +127,17 @@ void line_follow() {
     error = weighted_sum/sum;
     //Bang bang control
     if (!sum)
-        error = (abs(error_last) >= 5000)? constrain(error_last*1.5, -10000, 10000): error_last;
+        error = (abs(error_last) >= 5000)? constrain(error_last*3/2, -10000, 10000): error_last;
 #ifdef SERIAL_DEBUG
-    Serial.print("\tSum: ");
+    Serial.print("   Sum: ");
     Serial.print(sum);
-    Serial.print("\tError: ");
+    Serial.print("   Error: ");
     Serial.print(error);
 #endif
     //PID
     int steering_cmd = pid();
 #ifdef SERIAL_DEBUG
-    Serial.print("\tSteering cmd: ");
+    Serial.print("  Steering cmd: ");
     Serial.print(steering_cmd);
 #endif
     //write cmd
@@ -144,7 +146,7 @@ void line_follow() {
 
 void skip_barrier() {
     steering.write(STEERING_MED+STEERING_MAX);
-    if(millis()-start_time > BARRIER_DELAY) status = normal;
+    if(millis()-start_time > BARRIER_DELAY) state = normal;
 }
 
 int pid() {
@@ -170,7 +172,7 @@ int pid() {
 
 void brushless_init() {
     brushless.write(100);
-    delay(200);
+    delay(100);
     brushless.write(15);
     delay(3000);
     brushless.write(SPEED);
@@ -183,23 +185,26 @@ int ultrasonic() {
     digitalWrite(TRIGGER_PIN, HIGH);
     delayMicroseconds(10);
     digitalWrite(TRIGGER_PIN, LOW);
-    dura = pulseIn(ECHO_PIN, HIGH, 5000);
+    dura = pulseIn(ECHO_PIN, HIGH, 5000); //timeout shouldn't be too long for blocking delay
     dist = (dura/2) / 29.1;
     return dist;
 }
 
 int get_dist() {
-    int sum = 0;
+    int sum = 0, count = 0;
     int n = 5;
     for (int i = 0; i < n-1; ++i) dist_history[i] = dist_history[i+1];
-    dist_history[n-1] = ultrasonic();
-    if (dist_history[n-1] == 0) dist_history[n-1] = 200;
-    for (int i = 0; i < n; ++i) sum += dist_history[i];
-    sum /= n;
+    dist_history[n-1] = sonar.ping_cm();
+    for (int i = 0; i < n; ++i) {
+        if (dist_history[i])
+            ++count;
+        sum += dist_history[i];
+    }
+    if (!count) sum = 100;
+    else sum /= count;
 #ifdef SERIAL_DEBUG
     Serial.print("Dist: ");
-    Serial.print(sum);
-    Serial.print("\t");
+    Serial.print(sum);   
 #endif
     return sum;
 }
