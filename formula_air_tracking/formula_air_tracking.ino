@@ -29,9 +29,9 @@
 /********************Calibration Values*********/
 #define CALIBRATION {{550, 650}, {630, 730}, {630, 730}, {550, 650}, {600, 700}, {750, 850}}
 /********************PID Parameters*************/
-#define KP 4.25 * 0.001 
+#define KP 4.2 * 0.001 
 #define KI 0.0065 * 0.001
-#define KD 17.2 * 0.001
+#define KD 18 * 0.001
 
 Servo brushless;
 Servo steering;
@@ -46,11 +46,10 @@ int sensor_pin[6] = SENSOR_PIN;
 int calibration[6][2] = CALIBRATION;
 int pre_sensor_value[6] = {0};
 int dist_history[5] = {0};
-unsigned long start_time = 0, timer = 0;
+unsigned long start_time = 0, init_time = 0;
 float kp = KP, ki = KI, kd = KD;
-enum Status {normal, barrier};
-Status state = normal;
-bool flag = true;
+enum Status {initial, normal, barrier, last};
+Status state = initial;
 #ifdef BOOSTING
 int counter = 0;
 #endif
@@ -66,7 +65,7 @@ void setup() {
 #ifdef SERIAL_DEBUG
     Serial.begin(115200);
 #endif
-    //Pin initialization
+    //Pin initialialization
     for (int i = 0; i < 6; ++i) pinMode(sensor_pin[i], INPUT);
     pinMode(TRIGGER_PIN, OUTPUT);
     pinMode(ECHO_PIN, INPUT);
@@ -74,20 +73,13 @@ void setup() {
     steering.attach(STEERING_PIN);
     //Intial position
     steering.write(STEERING_MED);
-    state = normal;
+    state = initial;
     brushless_init();
-    timer = millis();
+    init_time = millis();
 }
 
 void loop() {
-    
-    if (get_dist() < BARRIER_DIST) {
-      start_time = millis();
-      state = barrier;
-    }
-    
     line_follow();
-    
     delay(DELTA_T);
 #ifdef SERIAL_DEBUG
     Serial.println("");
@@ -131,6 +123,7 @@ void line_follow() {
     //Bang bang control
     if (!sum)
         error = (abs(error_last) >= 5000)? constrain(error_last*3/2, -10000, 10000): error_last;
+    error_sum = error_sum*9/10 + error;
 #ifdef SERIAL_DEBUG
     Serial.print("   Sum: ");
     Serial.print(sum);
@@ -138,54 +131,63 @@ void line_follow() {
     Serial.print(error);
 #endif
     //PID or skip barrier
-    if( state == barrier ) {
-      if( millis() - start_time < BARRIER_DELAY ) steering_cmd = STEERING_MED+STEERING_MAX;
-      else {
-        steering_cmd = STEERING_MED + STEERING_MAX - 30;
-        brushless.write(SPEED-1);
-        if(sum && !sensor_value[0] && !sensor_value[5]) {
-          state = normal;
-          error_sum = 0;
-          flag = false;
+    if (state == initial) {
+        if (millis()-init_time > 7000) state = normal;
+        brushless_cmd = SPEED+1;
+        steering_cmd = pid();
+    }
+    else if (state == normal) {
+        if (get_dist() < BARRIER_DIST) {
+          start_time = millis();
+          state = barrier;
         }
-      }
-      error_last = error;
-      error_sum = error_sum*9/10 + error;
+        brushless_cmd = SPEED;
+        steering_cmd = pid();
+    }
+    else if (state == barrier) {
+        if (get_dist() < BARRIER_DIST) {
+          start_time = millis();
+        }
+        if (millis()-start_time < BARRIER_DELAY) {
+            brushless_cmd = SPEED;
+            steering_cmd = STEERING_MED+STEERING_MAX;
+        }
+        else {
+            steering_cmd = STEERING_MED + 5;
+            brushless_cmd = SPEED-1;
+            if(sum && !sensor_value[0] && !sensor_value[5]) {
+                state = last;
+                error_sum = 0;
+            }
+        }
     }
     else {
-      if(millis() - timer > 8000 && flag) brushless.write(SPEED);
-      steering_cmd = pid();
+        brushless_cmd = SPEED-1;
+        steering_cmd = pid();
     }
+    error_last = error;
 #ifdef SERIAL_DEBUG
     Serial.print("  Steering cmd: ");
     Serial.print(steering_cmd);
 #endif
     //write cmd
     steering.write(steering_cmd); 
-}
-
-void skip_barrier() {
-    steering.write(STEERING_MED+STEERING_MAX);
-    if(millis()-start_time > BARRIER_DELAY) state = normal;
+    brushless.write(brushless_cmd);
 }
 
 int pid() {
-    error_sum = error_sum*9/10 + error;
     long error_p = error;
     long error_d = error - error_last;
     long error_i = error_sum;
     //Speed boosting
 #ifdef BOOSTING
-    counter = (error_d)? 0: counter+1;
+    counter = (error_d)? 0 : counter+1;
     if (counter >= 500)
-        brushless.write(SPEED+10);
-    //else
-        //brushless.write(SPEED);
+        brushless_cmd = SPEED+10;
 #endif
     //Caculate Error
     int steering_cmd = STEERING_MED + error_p * kp + error_i * ki + error_d * kd;
     steering_cmd = constrain(steering_cmd, STEERING_MED-STEERING_MAX, STEERING_MED+STEERING_MAX);
-    error_last = error;
     
     return steering_cmd;
 }
@@ -196,18 +198,6 @@ void brushless_init() {
     brushless.write(15);
     delay(3000);
     brushless.write(SPEED+1);
-}
-
-int ultrasonic() {
-    long dura, dist;
-    digitalWrite(TRIGGER_PIN, LOW);
-    delayMicroseconds(2);
-    digitalWrite(TRIGGER_PIN, HIGH);
-    delayMicroseconds(10);
-    digitalWrite(TRIGGER_PIN, LOW);
-    dura = pulseIn(ECHO_PIN, HIGH, 5000); //timeout shouldn't be too long for blocking delay
-    dist = (dura/2) / 29.1;
-    return dist;
 }
 
 int get_dist() {
