@@ -23,9 +23,9 @@
 #define SPEED_IDLE 15
 #define SPEED_MAX 60
 #define SPEED 30 
-#define SPEED_LOW 25 
+#define SPEED_LOW 30 
 #define SPEED_MED 35
-#define SPEED_HIGH 45
+#define SPEED_HIGH 45 
 #define SPEED_DELTA 2
 
 /********************Objects********************/
@@ -163,9 +163,11 @@ void brushless_init() {
 }
 
 int nonlinearMap(int x) {
-    if (x == 0) return STEERING_MED-STEERING_MAX;
-    if (x == 255) return STEERING_MED+STEERING_MAX;
-    return map(x, 0, 255, STEERING_MED-STEERING_MAX+10, STEERING_MED+STEERING_MAX-10);
+    if (x == 0) return STEERING_MED-25;
+    if (x == 255) return STEERING_MED+25;
+    if (x >= 138) return STEERING_MED+5;
+    if (x <= 118) return STEERING_MED-5;
+    return STEERING_MED; 
 }
 
 void vibrate(int n = 100, int amp = 10) {
