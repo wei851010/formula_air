@@ -1,7 +1,8 @@
 /************************************************
-    FileName    [ formula_air_tracking.ino ]
-    Synopsis    [ Tracking line using PID and bang bang control ]
+    FileName    [ formula_air_rc.ino ]
+    Synopsis    [ Remote Control with PS2 joystick ]
     Author      [ Johnson Shih, Frank Lin ]
+    Last Edit   [ 2018/06/19 ]
     Copyleft    [ Group 15 小萌牛©2018, NTUME ]
 ************************************************/
 
@@ -22,34 +23,29 @@
 #define STEERING_MED 90
 #define SPEED_IDLE 15
 #define SPEED_MAX 60
-#define SPEED 30 
 #define SPEED_LOW 30 
 #define SPEED_MED 35
 #define SPEED_HIGH 45 
 #define SPEED_DELTA 2
-
 /********************Objects********************/
 Servo brushless;
 Servo steering;
 PS2X ps2x;
 /********************Variables******************/
-enum Status {disconn, conn};
-Status state = disconn;
+enum State {disconn, conn};
+State state = disconn;
 int brushless_cmd = SPEED_IDLE;
 int speed_low = SPEED_LOW;
 int speed_med = SPEED_MED;
 int speed_high = SPEED_HIGH;
 int speed = SPEED_IDLE;
-int vibrate_count = 0;
-int vibrate_amp = 50;
-
+/********************Functions******************/
 void ps2x_cmd();
 void ps2x_conn();
 void ps2x_button();
 void brushless_init();
 int nonlinearMap(int);
-void vibrate(int, int = 10);
-
+/********************Main Functions*************/
 void setup() {
 #ifdef SERIAL_DEBUG
     Serial.begin(115200);
@@ -68,10 +64,10 @@ void loop() {
         ps2x_cmd();
     delay(1);
 }
-
+/********************Helping Functions**********/
 void ps2x_conn() {
 #ifdef SERIAL_DEBUG
-    Serial.println("Connecting to gameoad...");
+    Serial.println("Connecting to gamepad...");
 #endif
     int error = ps2x.config_gamepad(PS2_CLK_PIN, PS2_CMD_PIN, PS2_SEL_PIN, PS2_DAT_PIN, false, false);
     if (!error) {
@@ -80,25 +76,23 @@ void ps2x_conn() {
         Serial.println("Connect Successfully");
 #endif
     }
-    else
 #ifdef SERIAL_DEBUG
+    else
         Serial.println("Cannot connect to gamepad, retrying...");
 #endif
     delay(1000);
 }
 
 void ps2x_cmd() {
-    int steering_cmd = 0;
     ps2x.read_gamepad(false, false);
-    //if (vibrate_count) --vibrate_count;
-
+    //filter for the case no signal
     int ly = ps2x.Analog(PSS_LY);
     int rx = ps2x.Analog(PSS_RX);
     int ry = ps2x.Analog(PSS_RY);
     int lx = ps2x.Analog(PSS_LX);
     if (ly == 255 && lx == 255) return;
 
-    steering_cmd = nonlinearMap(lx);
+    int steering_cmd = nonlinearMap(lx);
     ps2x_button();
          
 #ifdef SERIAL_DEBUG
@@ -114,7 +108,6 @@ void ps2x_cmd() {
     Serial.println("");
 #endif
 }
-
 /************************************************
 PSB_START, PSB_SELECT, PSB_PAD_UP, PSB_PAD_RIGHT, PSB_PAD_LEFT, PSB_PAD_DOWN
 PSB_TRIANGLE, PSB_CIRCLE, PSB_CROSS, PSB_SQUARE
@@ -128,6 +121,7 @@ void ps2x_button() {
         bool currUP = ps2x.Button(PSB_PAD_UP), currDOWN = ps2x.Button(PSB_PAD_DOWN), currLEFT = ps2x.Button(PSB_PAD_LEFT), currRIGHT = ps2x.Button(PSB_PAD_RIGHT);
         bool currSQ = ps2x.Button(PSB_SQUARE), currCRO = ps2x.Button(PSB_CROSS), currTRI = ps2x.Button(PSB_TRIANGLE), currCIR = ps2x.Button(PSB_CIRCLE);
         bool currR1 = ps2x.Button(PSB_R1), currR2 = ps2x.Button(PSB_R2), currL1 = ps2x.Button(PSB_L1), currL2 = ps2x.Button(PSB_L2);
+        //manually adjusting speed using UP, DOWN
         if (currUP && !preUP) {
             if (currTRI) speed_high += SPEED_DELTA;
             else if (currCIR) speed_med += SPEED_DELTA;
@@ -138,13 +132,12 @@ void ps2x_button() {
             else if (currCIR) speed_med -= SPEED_DELTA;
             else if (currCRO) speed_low -= SPEED_DELTA;
         }
+        //reset all speed
         if (currSQ&& !preSQ) {
             speed_low = SPEED_LOW;
             speed_med = SPEED_MED;
             speed_high = SPEED_HIGH;
         }
-
-        //vibrate(50);
         speed = constrain(speed, SPEED_IDLE, SPEED_MAX);
 
         brushless_cmd = currTRI? speed_high: currCIR? speed_med: currCRO? speed_low: SPEED_IDLE;
@@ -168,9 +161,4 @@ int nonlinearMap(int x) {
     if (x >= 138) return STEERING_MED+5;
     if (x <= 118) return STEERING_MED-5;
     return STEERING_MED; 
-}
-
-void vibrate(int n = 100, int amp = 10) {
-    vibrate_count = n;
-    vibrate_amp = amp;
 }

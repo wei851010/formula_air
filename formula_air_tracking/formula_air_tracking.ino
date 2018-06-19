@@ -2,6 +2,7 @@
     FileName    [ formula_air_tracking.ino ]
     Synopsis    [ Tracking line using PID and bang bang control ]
     Author      [ Johnson Shih, Frank Lin ]
+    Last Edit   [ 2018/06/19 ]
     Copyleft    [ Group 15 小萌牛©2018, NTUME ]
 ************************************************/
 
@@ -29,10 +30,10 @@
 /********************Calibration Values*********/
 #define CALIBRATION {{550, 650}, {630, 730}, {630, 730}, {550, 650}, {600, 700}, {750, 850}}
 /********************PID Parameters*************/
-#define KP 4.2 * 0.001 
+#define KP 4.2 * 0.001 //4.2
 #define KI 0.0065 * 0.001
 #define KD 18 * 0.001
-
+/********************Objects********************/
 Servo brushless;
 Servo steering;
 NewPing sonar(TRIGGER_PIN, ECHO_PIN, MAX_DISTANCE);
@@ -48,8 +49,8 @@ int pre_sensor_value[6] = {0};
 int dist_history[5] = {0};
 unsigned long start_time = 0, init_time = 0;
 float kp = KP, ki = KI, kd = KD;
-enum Status {initial, normal, barrier, last};
-Status state = initial;
+enum State {initial, normal, barrier, last};
+State state = initial;
 #ifdef BOOSTING
 int counter = 0;
 #endif
@@ -60,7 +61,7 @@ int pid();
 void skip_barrier();
 int get_dist();
 int ultrasonic();
-
+/********************Main Functions*************/
 void setup() {
 #ifdef SERIAL_DEBUG
     Serial.begin(115200);
@@ -85,7 +86,7 @@ void loop() {
     Serial.println("");
 #endif
 }
-
+/********************Helping Functions**********/
 void line_follow() {
     int steering_cmd;
     long sensor_value[6] = {0};
@@ -130,7 +131,7 @@ void line_follow() {
     Serial.print("   Error: ");
     Serial.print(error);
 #endif
-    //PID or skip barrier
+    //Motions accrding to different states
     if (state == initial) {
         if (millis()-init_time > 7000) state = normal;
         brushless_cmd = SPEED+1;
@@ -170,7 +171,7 @@ void line_follow() {
     Serial.print("  Steering cmd: ");
     Serial.print(steering_cmd);
 #endif
-    //write cmd
+    //Write cmd
     steering.write(steering_cmd); 
     brushless.write(brushless_cmd);
 }
